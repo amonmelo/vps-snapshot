@@ -3,47 +3,47 @@
 </p>
 
 <p align="center">
-  <strong>English</strong> · <a href="README.pt-BR.md">Portugues</a>
+  🇧🇷 <strong>Portugues</strong> · 🇺🇸 <a href="README.en.md">English</a> · 🇪🇸 <a href="README.es.md">Español</a> · 🇩🇪 <a href="README.de.md">Deutsch</a>
 </p>
 
 <p align="center">
-  <strong>Full-disk VPS backup to the cloud. One command to install, one command to run.</strong>
+  <strong>Backup completo da sua VPS para a nuvem. Um comando pra instalar, um comando pra rodar.</strong>
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick Start</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#-supported-providers">Providers</a> ·
-  <a href="#%EF%B8%8F-configuration">Configuration</a> ·
-  <a href="#-security">Security</a>
+  <a href="#-inicio-rapido">Inicio Rapido</a> ·
+  <a href="#-recursos">Recursos</a> ·
+  <a href="#-provedores-suportados">Provedores</a> ·
+  <a href="#%EF%B8%8F-configuracao">Configuracao</a> ·
+  <a href="#-seguranca">Seguranca</a>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Bun-1.0.0-black?style=flat-square&logo=bun&logoColor=white" alt="Bun">
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=flat-square" alt="MIT License">
+  <img src="https://img.shields.io/badge/Licenca-MIT-blue?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/Linux-x86__64%20%7C%20ARM64-yellow?style=flat-square&logo=linux&logoColor=white" alt="Linux">
-  <img src="https://img.shields.io/badge/Cloud-70%2B%20providers-ff69b4?style=flat-square" alt="Providers">
-  <img src="https://img.shields.io/badge/Install-1%20command-success?style=flat-square" alt="One command install">
+  <img src="https://img.shields.io/badge/Nuvem-70%2B%20provedores-ff69b4?style=flat-square" alt="Provedores">
+  <img src="https://img.shields.io/badge/Instalar-1%20comando-success?style=flat-square" alt="Um comando">
 </p>
 
 ---
 
-## Why?
+## Por que?
 
-Most VPS backup tools are either too complex (Borg, Duplicity) or too limited (simple cron + rsync). **VPS Snapshot hits the sweet spot** — full disk snapshot with selective restore, encrypted, verified, and ready in 60 seconds.
+A maioria das ferramentas de backup de VPS sao complexas demais (Borg, Duplicity) ou limitadas demais (cron + rsync simples). **VPS Snapshot acerta o meio termo** — snapshot completo do disco com restauracao seletiva, criptografado, verificado e pronto em 60 segundos.
 
-**The problem it solves:** Your VPS has custom configs, scripts, SSH keys, cron jobs, Docker setups that took hours to configure. If it dies, you're starting from zero. VPS Snapshot captures *everything* and lets you restore *exactly* what you need.
+**O problema que resolve:** Sua VPS tem configs customizadas, scripts, chaves SSH, cron jobs, setups de Docker que levaram horas pra configurar. Se ela morrer, voce comeca do zero. VPS Snapshot captura *tudo* e deixa voce restaurar *exatamente* o que precisa.
 
 ---
 
-## Quick Start
+## Inicio Rapido
 
 ```bash
-# Install (one command — interactive installer)
+# Instalar (um comando — instalador interativo)
 curl -sSL https://raw.githubusercontent.com/amonmelo/vps-snapshot/main/install.sh | sudo bash
 ```
 
-That's it. The installer handles everything:
+So isso. O instalador cuida de tudo:
 
 ```
  ╔═══════════════════════════════════════════════════╗
@@ -73,101 +73,101 @@ That's it. The installer handles everything:
     sudo vps-snapshot list        Listar backups
 ```
 
-### First backup
+### Primeiro backup
 
 ```bash
-# Estimate size first (recommended)
+# Estimar tamanho primeiro (recomendado)
 sudo vps-snapshot estimate
 
-# Run your first backup
+# Rodar o primeiro backup
 sudo vps-snapshot
 ```
 
-### Restore
+### Restaurar
 
 ```bash
-# List available backups
+# Listar backups disponiveis
 sudo vps-snapshot list
 
-# Browse what's inside
+# Navegar o conteudo
 sudo vps-snapshot browse 20250601150000
 
-# Extract specific paths
+# Extrair caminhos especificos
 sudo vps-snapshot extract 20250601150000 /etc/nginx /home/user --dest /tmp/restored
 
-# Full restore (on a fresh VPS!)
+# Restauracao completa (em uma VPS nova!)
 sudo vps-snapshot full 20250601150000
 ```
 
 ---
 
-## Features
+## Recursos
 
-- **One-command install** — Interactive guided installer, zero dependencies knowledge required
-- **Full disk snapshot** — Captures `/root`, `/home`, `/etc`, `/opt`, `/var`, Docker configs, cron jobs, SSH keys, systemd services
-- **Selective restore** — Extract only `/etc/nginx` or `/home/user`, not the entire backup
-- **Browse mode** — Navigate backup contents without downloading everything
-- **70+ cloud providers** — OneDrive, Google Drive, Dropbox, S3, Backblaze, SFTP, and more via rclone
-- **GPG encryption** — AES-256 symmetric or public key encryption (optional)
-- **SHA-256 verification** — Mandatory integrity check on upload and download. Fails closed, never silently.
-- **Auto-split** — Splits large backups into 4GB parts (OneDrive upload limit)
-- **Parallel compression** — Uses `pigz` when available, falls back to `gzip`
-- **Auto rotation** — Keep N backups, oldest deleted automatically
-- **Cron scheduling** — Daily, weekly, biweekly, monthly, or manual
-- **Works everywhere** — Ubuntu, Debian, CentOS, Fedora, Arch, Alpine, SUSE, any x86_64 or ARM64 Linux
+- **Instalacao em um comando** — Instalador interativo guiado, zero conhecimento de dependencias necessario
+- **Snapshot completo do disco** — Captura `/root`, `/home`, `/etc`, `/opt`, `/var`, configs do Docker, cron jobs, chaves SSH, servicos systemd
+- **Restauracao seletiva** — Extraia so `/etc/nginx` ou `/home/user`, nao o backup inteiro
+- **Modo browse** — Navegue o conteudo do backup sem baixar tudo
+- **70+ provedores de nuvem** — OneDrive, Google Drive, Dropbox, S3, Backblaze, SFTP e mais via rclone
+- **Criptografia GPG** — AES-256 simetrica ou chave publica (opcional)
+- **Verificacao SHA-256** — Checagem de integridade obrigatoria no upload e download. Falha fechada, nunca silenciosa.
+- **Auto-split** — Divide backups grandes em partes de 4GB (limite do OneDrive)
+- **Compressao paralela** — Usa `pigz` quando disponivel, fallback para `gzip`
+- **Rotacao automatica** — Mantenha N backups, os mais antigos sao excluidos automaticamente
+- **Agendamento via Cron** — Diario, semanal, quinzenal, mensal ou manual
+- **Funciona em qualquer lugar** — Ubuntu, Debian, CentOS, Fedora, Arch, Alpine, SUSE, qualquer Linux x86_64 ou ARM64
 
 ---
 
-## Supported Providers
+## Provedores Suportados
 
-| Provider | Free Tier | Setup |
-|----------|-----------|-------|
-| Microsoft OneDrive | 5 GB | OAuth (browser or token) |
+| Provedor | Espaco Gratis | Configuracao |
+|----------|---------------|--------------|
+| Microsoft OneDrive | 5 GB | OAuth (browser ou token) |
 | Google Drive | 15 GB | OAuth |
 | MEGA | 20 GB | OAuth |
-| Backblaze B2 | 10 GB | API key |
+| Backblaze B2 | 10 GB | Chave de API |
 | pCloud | 10 GB | OAuth |
 | Dropbox | 2 GB | OAuth |
-| Amazon S3 | 5 GB | Access key |
-| SFTP | — | Host + credentials |
+| Amazon S3 | 5 GB | Chave de acesso |
+| SFTP | — | Host + credenciais |
 
-...and 60+ more via [rclone](https://rclone.org/#providers).
+...e mais 60+ via [rclone](https://rclone.org/#providers).
 
 ---
 
-## How It Works
+## Como Funciona
 
 ```
-tar (root /)
-  → pigz (parallel compress)
-    → [GPG encrypt]
-      → split (4GB parts)
-        → SHA-256 manifest
+tar (raiz /)
+  → pigz (compressao paralela)
+    → [GPG criptografa]
+      → split (partes de 4GB)
+        → manifesto SHA-256
           → rclone upload
-            → verify integrity
+            → verifica integridade
 ```
 
-**What gets backed up:** Everything on disk — system configs, user files, Docker setups, SSH keys, cron jobs, systemd services, custom scripts.
+**O que entra no backup:** Tudo no disco — configs do sistema, arquivos do usuario, setups Docker, chaves SSH, cron jobs, servicos systemd, scripts customizados.
 
-**What gets excluded** (auto):
+**O que e excluido** (automatico):
 
-| Category | Paths |
-|----------|-------|
-| Virtual filesystems | `/proc`, `/sys`, `/dev`, `/run` |
-| Package caches | `/var/cache/apt`, `/var/cache/yum`, `/var/cache/dnf` |
-| Language caches | `node_modules`, `__pycache__`, `.cache`, `.npm` |
-| Build caches | `.cargo/registry`, `go/pkg/mod` |
-| Docker images | `/var/lib/docker/*` (optional) |
+| Categoria | Caminhos |
+|-----------|----------|
+| Filesystems virtuais | `/proc`, `/sys`, `/dev`, `/run` |
+| Caches de pacotes | `/var/cache/apt`, `/var/cache/yum`, `/var/cache/dnf` |
+| Caches de linguagens | `node_modules`, `__pycache__`, `.cache`, `.npm` |
+| Caches de build | `.cargo/registry`, `go/pkg/mod` |
+| Imagens Docker | `/var/lib/docker/*` (opcional) |
 | Swap | `/swapfile` |
-| Tool itself | `/opt/vps-snapshot` |
+| A propria ferramenta | `/opt/vps-snapshot` |
 
-All exclusions are configurable via `config.json`.
+Todas as exclusoes sao configuraveis via `config.json`.
 
 ---
 
-## Configuration
+## Configuracao
 
-Edit `/opt/vps-snapshot/config.json` after install:
+Edite `/opt/vps-snapshot/config.json` apos a instalacao:
 
 ```json
 {
@@ -188,96 +188,96 @@ Edit `/opt/vps-snapshot/config.json` after install:
 ```
 
 <details>
-<summary>Full config reference</summary>
+<summary>Referencia completa de configuracao</summary>
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `vpsName` | string | hostname | VPS identifier (used in cloud folder structure) |
-| `remoteName` | string | `onedrive` | rclone remote name |
-| `remotePath` | string | `Backup-VPS` | Root folder in cloud provider |
-| `keepBackups` | number | `5` | Max backups to retain (auto-rotation) |
-| `compressionLevel` | number | `6` | 1 (fast) to 9 (max) |
-| `splitSize` | string | `4G` | Max size per part (cloud upload limit) |
-| `excludeDockerImages` | bool | `false` | Exclude Docker image layers (~2GB+ savings) |
-| `excludePatterns` | string[] | `["*.log", ...]` | Glob patterns to exclude |
-| `excludePaths` | string[] | `["/proc", ...]` | Absolute paths to exclude |
-| `preBackupCommands` | string[] | `[]` | Shell commands before backup |
-| `postBackupCommands` | string[] | `[]` | Shell commands after backup |
-| `includeSystemInfo` | bool | `false` | Include hostname/distro in metadata |
-| `encryption.enabled` | bool | `false` | Enable GPG encryption |
-| `encryption.passphrase` | string | `""` | Symmetric passphrase (AES-256) |
-| `encryption.recipient` | string | `""` | GPG recipient email (public key) |
+| Campo | Tipo | Padrao | Descricao |
+|-------|------|--------|-----------|
+| `vpsName` | string | hostname | Identificador da VPS (usado na estrutura de pastas na nuvem) |
+| `remoteName` | string | `onedrive` | Nome do remote do rclone |
+| `remotePath` | string | `Backup-VPS` | Pasta raiz no provedor de nuvem |
+| `keepBackups` | number | `5` | Maximo de backups para manter (rotacao automatica) |
+| `compressionLevel` | number | `6` | 1 (rapido) a 9 (maximo) |
+| `splitSize` | string | `4G` | Tamanho maximo por parte (limite de upload na nuvem) |
+| `excludeDockerImages` | bool | `false` | Excluir camadas de imagens Docker (~2GB+ de economia) |
+| `excludePatterns` | string[] | `["*.log", ...]` | Padroes glob para excluir |
+| `excludePaths` | string[] | `["/proc", ...]` | Caminhos absolutos para excluir |
+| `preBackupCommands` | string[] | `[]` | Comandos shell antes do backup |
+| `postBackupCommands` | string[] | `[]` | Comandos shell depois do backup |
+| `includeSystemInfo` | bool | `false` | Incluir hostname/distro nos metadados |
+| `encryption.enabled` | bool | `false` | Ativar criptografia GPG |
+| `encryption.passphrase` | string | `""` | Senha simetrica (AES-256) |
+| `encryption.recipient` | string | `""` | Email do destinatario GPG (chave publica) |
 
 </details>
 
 ---
 
-## All Commands
+## Todos os Comandos
 
-| Command | Description |
-|---------|-------------|
-| `vps-snapshot` | Run backup |
-| `vps-snapshot estimate` | Estimate backup size |
-| `vps-snapshot list` | List backups in cloud |
-| `vps-snapshot browse [ts]` | Browse backup contents |
-| `vps-snapshot extract <ts> <paths> [--dest /dir]` | Extract specific paths |
-| `vps-snapshot full [ts]` | Full restore (fresh VPS) |
-| `vps-snapshot log [N]` | Show last N log lines |
-| `vps-snapshot status` | Provider status + space |
-| `vps-snapshot config` | Display current config |
+| Comando | Descricao |
+|---------|-----------|
+| `vps-snapshot` | Rodar backup |
+| `vps-snapshot estimate` | Estimar tamanho do backup |
+| `vps-snapshot list` | Listar backups na nuvem |
+| `vps-snapshot browse [ts]` | Navegar conteudo do backup |
+| `vps-snapshot extract <ts> <paths> [--dest /dir]` | Extrair caminhos especificos |
+| `vps-snapshot full [ts]` | Restauracao completa (VPS nova) |
+| `vps-snapshot log [N]` | Mostrar ultimas N linhas do log |
+| `vps-snapshot status` | Status do provedor + espaco |
+| `vps-snapshot config` | Exibir configuracao atual |
 
-Global flags: `-v` (verbose), `-c /path/config.json` (custom config), `-h` (help)
-
----
-
-## Security
-
-| Layer | Implementation |
-|-------|---------------|
-| **No eval** | All shell commands use `Bun.spawn()` with argument arrays — never string interpolation |
-| **Unpredictable lock** | `flock` with `mktemp` path — prevents symlink attacks on `/tmp` |
-| **Input sanitization** | Installer escapes `\ " \n \r \t` before writing `config.json` — prevents JSON injection |
-| **PII control** | Hostname, distro, kernel excluded from metadata by default (`includeSystemInfo: false`) |
-| **Mandatory integrity** | SHA-256 verified on every download — `die()` on mismatch, never silent |
-| **Protected restore** | `validateDestDir()` blocks extraction to `/`, `/bin`, `/usr`, `/etc`, `/boot` |
-| **Path traversal** | `validatePath()` rejects `..` in all user-provided paths |
-| **GPG encryption** | AES-256 symmetric or public key. Passphrase stored in `config.json` with `chmod 600` |
-| **Timestamp validation** | Enforces `YYYYMMDDHHmmss` format with range checks |
+Flags globais: `-v` (verbose), `-c /caminho/config.json` (config customizada), `-h` (ajuda)
 
 ---
 
-## Architecture
+## Seguranca
+
+| Camada | Implementacao |
+|--------|---------------|
+| **Sem eval** | Todos os comandos shell usam `Bun.spawn()` com arrays de argumentos — nunca interpolacao de strings |
+| **Lock imprevisivel** | `flock` com caminho `mktemp` — previne ataques de symlink em `/tmp` |
+| **Sanitizacao de input** | O instalador escapa `\ " \n \r \t` antes de escrever `config.json` — previne JSON injection |
+| **Controle de PII** | Hostname, distro, kernel excluidos dos metadados por padrao (`includeSystemInfo: false`) |
+| **Integridade obrigatoria** | SHA-256 verificado em todo download — `die()` em divergencia, nunca silencioso |
+| **Restauracao protegida** | `validateDestDir()` bloqueia extracao para `/`, `/bin`, `/usr`, `/etc`, `/boot` |
+| **Path traversal** | `validatePath()` rejeita `..` em todos os caminhos fornecidos pelo usuario |
+| **Criptografia GPG** | AES-256 simetrica ou chave publica. Senha armazenada em `config.json` com `chmod 600` |
+| **Validacao de timestamp** | Forca formato `YYYYMMDDHHmmss` com verificacao de intervalo |
+
+---
+
+## Arquitetura
 
 ```
 vps-snapshot/
-  install.sh          Interactive installer (474 lines, bash)
+  install.sh          Instalador interativo (474 linhas, bash)
   src/
-    index.ts          Entry point — arg parsing + dispatch
-    config.ts         Config loader + input validation
-    logger.ts         Standardized logging [ERROR/SUCCESS/INFO/WARN/DEBUG]
-    backup.ts         Backup engine — tar, compress, encrypt, split, upload
-    restore.ts        Restore engine — list, browse, extract, full
+    index.ts          Ponto de entrada — parse de args + dispatch
+    config.ts         Loader de config + validacao de input
+    logger.ts         Logging padronizado [ERROR/SUCCESS/INFO/WARN/DEBUG]
+    backup.ts         Motor de backup — tar, comprime, criptografa, splita, uploada
+    restore.ts        Motor de restauracao — list, browse, extract, full
     utils.ts          rclone, flock, retry, mktemp, sha256, GPG, pigz
 ```
 
-**Runtime:** [Bun](https://bun.sh/) — 3x faster than Node.js, native TypeScript, zero config.  
-**Transport:** [rclone](https://rclone.org/) — battle-tested, 70+ cloud backends, auto-refresh OAuth tokens.
+**Runtime:** [Bun](https://bun.sh/) — 3x mais rapido que Node.js, TypeScript nativo, zero config.
+**Transporte:** [rclone](https://rclone.org/) — testado em batalha, 70+ backends de nuvem, OAuth tokens com auto-refresh.
 
 ---
 
-## Requirements
+## Requisitos
 
-- Linux (x86_64 or ARM64)
-- Root access
-- Internet connection
-- 1 GB+ free in `/tmp`
+- Linux (x86_64 ou ARM64)
+- Acesso root
+- Conexao com a internet
+- 1 GB+ livre em `/tmp`
 
-The installer handles all dependencies automatically:
-- Bun, rclone, pigz, GPG (if encryption enabled), zip, curl
+O instalador cuida de todas as dependencias automaticamente:
+- Bun, rclone, pigz, GPG (se criptografia ativada), zip, curl
 
 ---
 
-## Uninstall
+## Desinstalar
 
 ```bash
 sudo rm -rf /opt/vps-snapshot
@@ -287,12 +287,13 @@ sudo rm /etc/cron.d/vps-snapshot
 
 ---
 
-## License
+## Licenca
 
-[MIT](LICENSE) — use it however you want.
+[MIT](LICENSE) — use como quiser.
 
 ---
 
 <p align="center">
-  Built with <a href="https://bun.sh/">Bun</a> · Powered by <a href="https://rclone.org/">rclone</a>
+  Feito com <a href="https://bun.sh/">Bun</a> · Movido por <a href="https://rclone.org/">rclone</a><br>
+  Feito por <a href="https://www.linkedin.com/in/amonmelo/">Amon Melo</a>
 </p>
