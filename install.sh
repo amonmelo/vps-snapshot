@@ -245,6 +245,27 @@ if ask_yn "Excluir imagens Docker? (economiza espaco, sao reinstalaveis)" "y"; t
     EXCLUDE_DOCKER="true"
 fi
 
+# ── Criptografia GPG ──
+ENCRYPTION_ENABLED="false"
+ENCRYPTION_PASSPHRASE=""
+ENCRYPTION_RECIPIENT=""
+if ask_yn "Criptografar backups com GPG?" "n"; then
+    ENCRYPTION_ENABLED="true"
+    if ask_yn "Usar chave publica GPG (recipient) em vez de senha?" "n"; then
+        ENCRYPTION_RECIPIENT=$(ask_str "Email do recipient GPG" "")
+        [[ -z "$ENCRYPTION_RECIPIENT" ]] && ENCRYPTION_RECIPIENT=""
+    else
+        ENCRYPTION_PASSPHRASE=$(ask_str "Senha para criptografia (deixe vazio para pular)" "")
+        [[ -z "$ENCRYPTION_PASSPHRASE" ]] && ENCRYPTION_ENABLED="false"
+    fi
+fi
+
+# ── PII no metadata ──
+INCLUDE_SYSINFO="false"
+if ask_yn "Incluir info do sistema no metadata? (hostname, distro, kernel)" "n"; then
+    INCLUDE_SYSINFO="true"
+fi
+
 # ═══════════════════════════════════
 # PASSO 5: INSTALACAO
 # ═══════════════════════════════════
@@ -253,6 +274,9 @@ echo -e "\n${BOLD}${CYAN}── PASSO 5/5 — Instalando ──${NC}\n"
 install_pkg zip
 install_pkg curl
 install_pkg unzip
+if [[ "$ENCRYPTION_ENABLED" == "true" ]]; then
+    install_pkg gnupg2
+fi
 install_bun
 install_rclone
 
@@ -314,7 +338,13 @@ cat > "$INSTALL_DIR/config.json" << CFGEOF
     "$INSTALL_DIR", "/tmp/vps-snapshot-*"
   ],
   "preBackupCommands": [],
-  "postBackupCommands": []
+  "postBackupCommands": [],
+  "includeSystemInfo": $INCLUDE_SYSINFO,
+  "encryption": {
+    "enabled": $ENCRYPTION_ENABLED,
+    "passphrase": "$ENCRYPTION_PASSPHRASE",
+    "recipient": "$ENCRYPTION_RECIPIENT"
+  }
 }
 CFGEOF
 chmod 600 "$INSTALL_DIR/config.json"

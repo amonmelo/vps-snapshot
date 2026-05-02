@@ -211,6 +211,117 @@ export function systemInfo(): { hostname: string; kernel: string; arch: string; 
   return { hostname, kernel, arch, distro };
 }
 
+// ── Verificação de integridade ──
+
+/** Gera SHA256 de um arquivo. Retorna string hex lowercase. */
+export async function sha256File(filePath: string): Promise<string> {
+  const result = Bun.spawnSync(["sha256sum", filePath], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const out = result.stdout.toString().trim();
+  if (!out || result.exitCode !== 0) {
+    die(`sha256sum falhou para: ${filePath}`);
+  }
+  // sha256sum output: "hash  filename"
+  return out.split(/\s+/)[0];
+}
+
+/** Gera checksum de todas as parts e salva em .sha256 */
+export async function generateChecksumManifest(
+  partsDir: string,
+  manifestPath: string,
+): Promise<void> {
+  const parts = (await run(`ls -1 "${partsDir}" | sort`, "list parts for checksum")).split("\n").filter(Boolean);
+  const lines: string[] = [];
+  for (const part of parts) {
+    const hash = await sha256File(`${partsDir}/${part}`);
+    lines.push(`${hash}  ${part}`);
+  }
+  const content = lines.join("\n") + "\n";
+  await Bun.write(manifestPath, content);
+}
+
+/** Verifica parts contra .sha256 manifest. DIE em falha. */
+export async function verifyChecksumManifest(
+  dirPath: string,
+  manifestPath: string,
+): Promise<void> {
+  if (!require("fs").existsSync(manifestPath)) {
+    logger.warn("Manifesto .sha256 nao encontrado — verificacao de integridade pulada");
+    return;
+  }
+
+  const result = Bun.spawnSync(["sha256sum", "-c", manifestPath], {
+    cwd: dirPath,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim();
+    die(`INTEGRIDADE COMPROMETIDA! sha256sum falhou:\n${stderr || "arquivo(s) corrompido(s)"}\n  O download pode ter falhado. Tente novamente.`);
+  }
+  logger.success("Integridade SHA256 verificada — OK");
+}
+
+// ── Criptografia GPG ──
+
+/** Criptografa um arquivo com GPG (symmetric ou public key) */
+export async function gpgEncrypt(inputFile: string, outputFile: string, encryption: { passphrase: string; recipient: string }): Promise<void> {
+  const args: string[] = ["--batch", "--yes", "--compress-algo", "none"];
+
+  if (encryption.recipient) {
+    // Public key encryption
+    args.push("--trust-model", "always", "--encrypt", "--recipient", encryption.recipient);
+  } else {
+    // Symmetric encryption
+    args.push("--symmetric", "--cipher-algo", "AES256");
+    if (encryption.passphrase) {
+      args.push("--passphrase", encryption.passphrase, "--no-tty");
+    }
+  }
+
+  args.push("--output", outputFile, inputFile);
+
+  const result = Bun.spawnSync(["gpg", ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim();
+    die(`GPG encrypt falhou: ${stderr}`);
+  }
+}
+
+/** Descriptografa um arquivo com GPG */
+export async function gpgDecrypt(inputFile: string, outputFile: string, encryption: { passphrase: string; recipient: string }): Promise<void> {
+  const args: string[] = ["--batch", "--yes", "--decrypt"];
+
+  if (encryption.passphrase) {
+    args.push("--passphrase", encryption.passphrase, "--no-tty");
+  }
+
+  args.push("--output", outputFile, inputFile);
+
+  const result = Bun.spawnSync(["gpg", ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim();
+    die(`GPG decrypt falhou: ${stderr}\n  Verifique a passphrase no config.json`);
+  }
+}
+
+/** Verifica se gpg está instalado */
+export function checkGpg(): boolean {
+  const result = Bun.spawnSync(["which", "gpg"], { stdout: "pipe", stderr: "pipe" });
+  return result.exitCode === 0;
+}
+
 // ── Helpers ──
 
 function sleep(ms: number): Promise<void> {
