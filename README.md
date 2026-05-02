@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <strong>English</strong> · <a href="README.pt-BR.md">Portugues</a>
+</p>
+
+<p align="center">
   <strong>Full-disk VPS backup to the cloud. One command to install, one command to run.</strong>
 </p>
 
