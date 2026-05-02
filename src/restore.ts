@@ -40,15 +40,11 @@ export async function cmdList(config: SnapshotConfig): Promise<void> {
     try { size = await rcloneSize(fullRemote); } catch { /* skip */ }
 
     let files = "?";
-    try {
-      const parts = await rcloneList(fullRemote);
-      files = String(parts.length);
-    } catch { /* skip */ }
-
     let enc = "?";
     try {
       const parts = await rcloneList(fullRemote);
-      enc = parts.some((p) => p.includes(".gpg")) ? "GPG" : "Nao";
+      files = String(parts.length);
+      enc = parts.some(function(p) { return p.includes(".gpg"); }) ? "GPG" : "Nao";
     } catch { /* skip */ }
 
     const num = String(i + 1).padStart(2);

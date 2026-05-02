@@ -274,6 +274,16 @@ echo -e "\n${BOLD}${CYAN}── PASSO 5/5 — Instalando ──${NC}\n"
 install_pkg zip
 install_pkg curl
 install_pkg unzip
+# pigz = gzip paralelo (performance boost, opcional)
+if command -v pigz &>/dev/null; then
+    ok "pigz ja instalado (compressao paralela disponivel)"
+else
+    if install_pkg pigz 2>/dev/null; then
+        ok "pigz instalado (compressao paralela disponivel)"
+    else
+        warn "pigz nao disponivel neste sistema — usara gzip"
+    fi
+fi
 if [[ "$ENCRYPTION_ENABLED" == "true" ]]; then
     install_pkg gnupg2
 fi
@@ -314,17 +324,34 @@ if ! $download_ok || [[ ! -f "$INSTALL_DIR/src/index.ts" ]] || [[ ! -s "$INSTALL
     fi
 fi
 
-# ── Gerar config ──
+# Sanitizar inputs para JSON (evitar injection)
+sanitize_json_str() {
+    local s="$1"
+    s="${s//\\/\\\\}"       # escape backslash
+    s="${s//\"/\\\"}"     # escape double quotes
+    s="${s//$'\n'/\\n}"   # escape newlines
+    s="${s//$'\r'/\\r}"   # escape carriage returns
+    s="${s//$'\t'/\\t}"   # escape tabs
+    echo -n "$s"
+}
+
+# ── Gerar config (com sanitizacao) ──
 info "Gerando configuracao..."
+SJ_VPS_NAME="$(sanitize_json_str "$VPS_NAME")"
+SJ_REMOTE_NAME="$(sanitize_json_str "$REMOTE_NAME")"
+SJ_REMOTE_PATH="$(sanitize_json_str "$REMOTE_PATH")"
+SJ_ENCRYPTION_PASSPHRASE="$(sanitize_json_str "$ENCRYPTION_PASSPHRASE")"
+SJ_ENCRYPTION_RECIPIENT="$(sanitize_json_str "$ENCRYPTION_RECIPIENT")"
+
 cat > "$INSTALL_DIR/config.json" << CFGEOF
 {
-  "vpsName": "$VPS_NAME",
-  "remoteName": "$REMOTE_NAME",
-  "remotePath": "$REMOTE_PATH",
-  "keepBackups": $KEEP_BACKUPS,
-  "compressionLevel": $COMPRESSION,
-  "splitSize": "$SPLIT_SIZE",
-  "excludeDockerImages": $EXCLUDE_DOCKER,
+  "vpsName": "${SJ_VPS_NAME}",
+  "remoteName": "${SJ_REMOTE_NAME}",
+  "remotePath": "${SJ_REMOTE_PATH}",
+  "keepBackups": ${KEEP_BACKUPS},
+  "compressionLevel": ${COMPRESSION},
+  "splitSize": "${SPLIT_SIZE}",
+  "excludeDockerImages": ${EXCLUDE_DOCKER},
   "excludePatterns": [
     "*.log", "*.tmp", "*.pid", "*.sock", "*.swap", "nohup.out",
     "*/node_modules", "*/__pycache__", "*/.cache", "*/.npm",
@@ -335,15 +362,15 @@ cat > "$INSTALL_DIR/config.json" << CFGEOF
     "/snap", "/boot/efi",
     "/var/cache/apt/archives", "/var/cache/yum", "/var/cache/dnf",
     "/var/lib/apt/lists",
-    "$INSTALL_DIR", "/tmp/vps-snapshot-*"
+    "${SJ_VPS_NAME}" , "/tmp/vps-snapshot-*"
   ],
   "preBackupCommands": [],
   "postBackupCommands": [],
-  "includeSystemInfo": $INCLUDE_SYSINFO,
+  "includeSystemInfo": ${INCLUDE_SYSINFO},
   "encryption": {
-    "enabled": $ENCRYPTION_ENABLED,
-    "passphrase": "$ENCRYPTION_PASSPHRASE",
-    "recipient": "$ENCRYPTION_RECIPIENT"
+    "enabled": ${ENCRYPTION_ENABLED},
+    "passphrase": "${SJ_ENCRYPTION_PASSPHRASE}",
+    "recipient": "${SJ_ENCRYPTION_RECIPIENT}"
   }
 }
 CFGEOF

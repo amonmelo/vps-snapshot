@@ -1,6 +1,6 @@
 /**
  * VPS Snapshot — Utilitários
- * rclone, flock, retry, mktemp, sistema
+ * rclone, flock, retry, mktemp, sistema, compressao
  */
 
 import { die, logger } from "./logger";
@@ -57,15 +57,16 @@ export async function retry<T>(
   throw new Error("unreachable");
 }
 
-// ── Lock com flock ──
+// ── Lock com flock (path imprevisivel) ──
 
 let lockFd: number | null = null;
-const LOCK_PATH = "/tmp/vps-snapshot.lock";
+let lockPath: string | null = null;
 
 export function acquireLock(): void {
   if (!lockFd) {
+    lockPath = mkTempFile("vps-snapshot-lock-");
     try {
-      lockFd = Bun.open(LOCK_PATH, "w").fd;
+      lockFd = Bun.open(lockPath, "w").fd;
       if (!lockFd) throw new Error("nao abriu");
     } catch {
       die("Nao conseguiu criar lock file");
@@ -79,7 +80,7 @@ export function acquireLock(): void {
   });
 
   if (result.exitCode !== 0) {
-    die("Outro backup ja esta rodando. Aguarde ou mate: rm /tmp/vps-snapshot.lock");
+    die("Outro backup ja esta rodando. Aguarde ou mate o processo anterior.");
   }
 
   logger.debug("Lock adquirido");
@@ -89,7 +90,10 @@ export function releaseLock(): void {
   if (lockFd !== null) {
     try { Bun.close(lockFd); } catch { /* ignore */ }
     lockFd = null;
-    try { unlinkSync("/tmp/vps-snapshot.lock"); } catch { /* ignore */ }
+  }
+  if (lockPath) {
+    try { require("fs").unlinkSync(lockPath); } catch { /* ignore */ }
+    lockPath = null;
   }
 }
 
@@ -120,16 +124,16 @@ export function mkTempFile(prefix = "vps-snapshot-"): string {
 // ── Rclone helpers ──
 
 export function rcloneRemote(remoteName: string, remotePath: string): string {
-  return `${remoteName}:${remotePath}`;
+  return remoteName + ":" + remotePath;
 }
 
 export async function rcloneCheck(remoteName: string): Promise<boolean> {
-  const code = await runQuiet(`rclone lsd "${remoteName}:" 2>/dev/null`);
+  const code = await runQuiet('rclone lsd "' + remoteName + ':" 2>/dev/null');
   return code === 0;
 }
 
 export async function rcloneMkdir(remote: string): Promise<void> {
-  await run(`rclone mkdir "${remote}"`, "rclone mkdir");
+  await run('rclone mkdir "' + remote + '"', "rclone mkdir");
 }
 
 export async function rcloneUpload(
@@ -140,7 +144,7 @@ export async function rcloneUpload(
   await retry(
     async () => {
       await run(
-        `rclone copy "${local}" "${remote}" --progress --transfers 4 --checkers 8`,
+        'rclone copy "' + local + '" "' + remote + '" --progress --transfers 4 --checkers 8',
         label,
       );
     },
@@ -158,7 +162,7 @@ export async function rcloneDownload(
   await retry(
     async () => {
       await run(
-        `rclone copy "${remote}" "${local}" --progress --transfers 4 --checkers 8`,
+        'rclone copy "' + remote + '" "' + local + '" --progress --transfers 4 --checkers 8',
         label,
       );
     },
@@ -168,21 +172,27 @@ export async function rcloneDownload(
   );
 }
 
+/** Lista diretorio remoto. Sort local (rclone --sort-by nao e confiavel). */
 export async function rcloneList(remote: string): Promise<string[]> {
-  const out = await run(`rclone lsf "${remote}" --sort-by modtime --order-by desc`, "rclone list");
-  return out.split("\n").filter(Boolean).map((s) => s.trim());
+  const out = await run('rclone lsf "' + remote + '"', "rclone list");
+  return out
+    .split("\n")
+    .filter(Boolean)
+    .map((s) => s.trim())
+    .sort()
+    .reverse();
 }
 
 export async function rcloneDelete(remote: string): Promise<void> {
-  await run(`rclone purge "${remote}"`, "rclone delete");
+  await run('rclone purge "' + remote + '"', "rclone delete");
 }
 
 export async function rcloneSize(remote: string): Promise<string> {
-  return await run(`rclone size "${remote}"`, "rclone size");
+  return await run('rclone size "' + remote + '"', "rclone size");
 }
 
 export async function rcloneSpace(remoteName: string): Promise<{ used: string; free: string }> {
-  const out = await run(`rclone about "${remoteName}:" --json 2>/dev/null || echo '{}'`, "rclone about");
+  const out = await run('rclone about "' + remoteName + ':" --json 2>/dev/null || echo \'{}\'', "rclone about");
   try {
     const j = JSON.parse(out);
     return {
@@ -221,9 +231,8 @@ export async function sha256File(filePath: string): Promise<string> {
   });
   const out = result.stdout.toString().trim();
   if (!out || result.exitCode !== 0) {
-    die(`sha256sum falhou para: ${filePath}`);
+    die("sha256sum falhou para: " + filePath);
   }
-  // sha256sum output: "hash  filename"
   return out.split(/\s+/)[0];
 }
 
@@ -232,11 +241,13 @@ export async function generateChecksumManifest(
   partsDir: string,
   manifestPath: string,
 ): Promise<void> {
-  const parts = (await run(`ls -1 "${partsDir}" | sort`, "list parts for checksum")).split("\n").filter(Boolean);
+  const parts = (await run('ls -1 "' + partsDir + '" | sort', "list parts for checksum"))
+    .split("\n")
+    .filter(Boolean);
   const lines: string[] = [];
   for (const part of parts) {
-    const hash = await sha256File(`${partsDir}/${part}`);
-    lines.push(`${hash}  ${part}`);
+    const hash = await sha256File(partsDir + "/" + part);
+    lines.push(hash + "  " + part);
   }
   const content = lines.join("\n") + "\n";
   await Bun.write(manifestPath, content);
@@ -260,7 +271,7 @@ export async function verifyChecksumManifest(
 
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString().trim();
-    die(`INTEGRIDADE COMPROMETIDA! sha256sum falhou:\n${stderr || "arquivo(s) corrompido(s)"}\n  O download pode ter falhado. Tente novamente.`);
+    die("INTEGRIDADE COMPROMETIDA! sha256sum falhou:\n" + (stderr || "arquivo(s) corrompido(s)") + "\n  O download pode ter falhado. Tente novamente.");
   }
   logger.success("Integridade SHA256 verificada — OK");
 }
@@ -272,10 +283,8 @@ export async function gpgEncrypt(inputFile: string, outputFile: string, encrypti
   const args: string[] = ["--batch", "--yes", "--compress-algo", "none"];
 
   if (encryption.recipient) {
-    // Public key encryption
     args.push("--trust-model", "always", "--encrypt", "--recipient", encryption.recipient);
   } else {
-    // Symmetric encryption
     args.push("--symmetric", "--cipher-algo", "AES256");
     if (encryption.passphrase) {
       args.push("--passphrase", encryption.passphrase, "--no-tty");
@@ -291,7 +300,7 @@ export async function gpgEncrypt(inputFile: string, outputFile: string, encrypti
 
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString().trim();
-    die(`GPG encrypt falhou: ${stderr}`);
+    die("GPG encrypt falhou: " + stderr);
   }
 }
 
@@ -312,7 +321,7 @@ export async function gpgDecrypt(inputFile: string, outputFile: string, encrypti
 
   if (result.exitCode !== 0) {
     const stderr = result.stderr.toString().trim();
-    die(`GPG decrypt falhou: ${stderr}\n  Verifique a passphrase no config.json`);
+    die("GPG decrypt falhou: " + stderr + "\n  Verifique a passphrase no config.json");
   }
 }
 
@@ -322,19 +331,33 @@ export function checkGpg(): boolean {
   return result.exitCode === 0;
 }
 
+// ── Compressão ──
+
+/** Detecta pigz disponivel. Retorna caminho ou null. */
+export function getPigz(): string | null {
+  const result = Bun.spawnSync(["which", "pigz"], { stdout: "pipe", stderr: "pipe" });
+  if (result.exitCode === 0) {
+    return result.stdout.toString().trim();
+  }
+  return null;
+}
+
+/** Verifica espaco livre em um path (bytes) */
+export async function getFreeSpace(path: string): Promise<number> {
+  const out = await run('df -k "' + path + '" | tail -1 | awk \'{print $4}\'', "disk space");
+  return Number(out) * 1024; // KB → bytes
+}
+
 // ── Helpers ──
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function formatBytes(bytes: number): string {
+/** Formata bytes em string legivel */
+export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
-
-function unlinkSync(path: string): void {
-  try { require("fs").unlinkSync(path); } catch { /* ignore */ }
+  return (bytes / Math.pow(1024, i)).toFixed(1) + " " + units[i];
 }
