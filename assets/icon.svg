@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#00e6b8"/>
+      <stop offset="100%" stop-color="#00a88a"/>
+    </linearGradient>
+    <linearGradient id="serverGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1a1b2e"/>
+      <stop offset="100%" stop-color="#12132a"/>
+    </linearGradient>
+    <clipPath id="shieldClip">
+      <path d="M256 40 L440 120 L440 280 C440 380 360 450 256 480 C152 450 72 380 72 280 L72 120 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Shield outline / background -->
+  <path d="M256 40 L440 120 L440 280 C440 380 360 450 256 480 C152 450 72 380 72 280 L72 120 Z"
+        fill="url(#shieldGrad)" stroke="none"/>
+
+  <!-- Inner dark area -->
+  <path d="M256 64 L418 134 L418 276 C418 368 346 430 256 458 C166 430 94 368 94 276 L94 134 Z"
+        fill="url(#serverGrad)" stroke="none"/>
+
+  <!-- Server rack - top unit -->
+  <rect x="166" y="156" width="180" height="64" rx="8" ry="8" fill="#2a2b4e" stroke="#00d4aa" stroke-width="2"/>
+  <!-- Server lines top unit -->
+  <line x1="186" y1="176" x2="280" y2="176" stroke="#00d4aa" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="186" y1="192" x2="310" y2="192" stroke="#00d4aa" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  <!-- Status LEDs top -->
+  <circle cx="326" cy="176" r="5" fill="#00d4aa"/>
+  <circle cx="326" cy="196" r="4" fill="#00d4aa" opacity="0.5"/>
+
+  <!-- Server rack - middle unit -->
+  <rect x="166" y="232" width="180" height="64" rx="8" ry="8" fill="#2a2b4e" stroke="#00d4aa" stroke-width="2"/>
+  <!-- Server lines middle unit -->
+  <line x1="186" y1="252" x2="270" y2="252" stroke="#00d4aa" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="186" y1="268" x2="300" y2="268" stroke="#00d4aa" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  <!-- Status LEDs middle -->
+  <circle cx="326" cy="252" r="5" fill="#00d4aa"/>
+  <circle cx="326" cy="272" r="4" fill="#00d4aa" opacity="0.5"/>
+
+  <!-- Server rack - bottom unit -->
+  <rect x="166" y="308" width="180" height="64" rx="8" ry="8" fill="#2a2b4e" stroke="#00d4aa" stroke-width="2"/>
+  <!-- Server lines bottom unit -->
+  <line x1="186" y1="328" x2="290" y2="328" stroke="#00d4aa" stroke-width="2.5" stroke-linecap="round" opacity="0.8"/>
+  <line x1="186" y1="344" x2="260" y2="344" stroke="#00d4aa" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/>
+  <!-- Status LEDs bottom -->
+  <circle cx="326" cy="328" r="5" fill="#00d4aa"/>
+  <circle cx="326" cy="348" r="4" fill="#00d4aa" opacity="0.5"/>
+
+  <!-- Checkmark overlay at bottom -->
+  <circle cx="256" cy="424" r="18" fill="#00d4aa"/>
+  <polyline points="244,424 252,432 270,414" fill="none" stroke="#1a1b2e" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
