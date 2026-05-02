@@ -1,99 +1,73 @@
 #!/usr/bin/env bash
 #
-# VPS Snapshot - Instalador Interativo
-# https://github.com/SEU_USER/vps-snapshot
+# VPS Snapshot — Instalador One-Click
+# https://github.com/amonmelo/vps-snapshot
 #
-# Uso: curl -sSL https://raw.githubusercontent.com/SEU_USER/vps-snapshot/main/install.sh | sudo bash
+# curl -sSL https://raw.githubusercontent.com/amonmelo/vps-snapshot/main/install.sh | sudo bash
 #
-set -euo pipefail
+set -eo pipefail
 
-# ═══════════════════════════════════════
-# CORES E HELPERS
-# ═══════════════════════════════════════
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
 BOLD='\033[1m'; DIM='\033[2m'; NC='\033[0m'
-
 info()  { echo -e "${CYAN}  [i]${NC} $*"; }
 ok()    { echo -e "${GREEN}  [✓]${NC} $*"; }
 warn()  { echo -e "${YELLOW}  [!]${NC} $*"; }
 die()   { echo -e "${RED}  [✗]${NC} $*" >&2; exit 1; }
-step()  { echo -e "\n${BOLD}${CYAN}── $1 ──${NC}"; }
-ask()   {
-    local label="$1" var="$2" default="${3:-}"
+
+# ── Root ──
+if (( EUID != 0 )); then
+    if command -v sudo &>/dev/null; then exec sudo bash "$0" "$@"; fi
+    die "Rode como root: sudo bash install.sh"
+fi
+
+INSTALL_TMP="$(mktemp -d /tmp/vps-snapshot-install-XXXXXX)"
+trap 'rm -rf "$INSTALL_TMP" /tmp/vps-snapshot-install-rclone-* 2>/dev/null' EXIT
+
+# ── Helpers seguros (sem eval) ──
+ask_str() {
+    local label="$1" default="${2:-}"
     local prompt
-    if [[ -n "$default" ]]; then
-        prompt="$label [$default]: "
-    else
-        prompt="$label: "
-    fi
+    [[ -n "$default" ]] && prompt="$label [$default]: " || prompt="$label: "
     echo -ne "${CYAN}  ? ${NC}${prompt}"
-    read -r reply
-    reply="${reply:-$default}"
-    reply="${reply:-$default}"
-    eval "$var=\"\$reply\""
-}
-ask_yn() {
-    local label="$1" default="${2:-y}"
-    local y n prompt
-    if [[ "$default" =~ ^[Yy]$ ]]; then
-        prompt="$label [S/n]: "; y="S"; n="n"
-    else
-        prompt="$label [s/N]: "; y="s"; n="N"
-    fi
-    echo -ne "${CYAN}  ? ${NC}${prompt}"
-    read -r reply
-    reply="${reply:-$default}"
-    [[ "$reply" =~ ^[SsYy]$ ]]
-}
-ask_choice() {
-    local label="$1" default="${2:-1}"; shift 2
-    echo -e "${CYAN}  ? ${NC}$label"
-    local i=1
-    for opt in "$@"; do
-        echo -e "    ${DIM}($i)${NC} $opt"
-        i=$((i+1))
-    done
-    echo -ne "    ${BOLD}Escolha [$default]: ${NC}"
-    read -r reply
+    IFS= read -r reply || reply=""
     reply="${reply:-$default}"
     echo "$reply"
 }
 
-# ═══════════════════════════════════════
-# SUDO CHECK
-# ═══════════════════════════════════════
-ensure_root() {
-    if (( EUID != 0 )); then
-        warn "Precisa de root (sudo). Tentando elevar..."
-        if command -v sudo &>/dev/null; then
-            exec sudo bash "$0" "$@"
-        else
-            die "Rode como root: sudo bash install.sh"
-        fi
-    fi
+ask_yn() {
+    local label="$1" default="${2:-y}"
+    local prompt
+    [[ "$default" =~ ^[Yy] ]] && prompt="$label [S/n]: " || prompt="$label [s/N]: "
+    echo -ne "${CYAN}  ? ${NC}${prompt}"
+    IFS= read -r reply || reply=""
+    reply="${reply:-$default}"
+    [[ "$reply" =~ ^[SsYy]$ ]]
 }
-ensure_root "$@"
 
-# ═══════════════════════════════════════
-# DISTRO DETECT
-# ═══════════════════════════════════════
-detect_distro() {
-    DISTRO_ID=""
-    DISTRO_VERSION=""
-    if [[ -f /etc/os-release ]]; then
-        DISTRO_ID=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"' | head -1)
-        DISTRO_VERSION=$(grep '^VERSION_ID=' /etc/os-release | cut -d= -f2 | tr -d '"' | head -1)
-    fi
+ask_choice() {
+    local label="$1" default="${2:-1}"; shift 2
+    echo -e "${CYAN}  ? ${NC}$label"
+    local i=1
+    for opt in "$@"; do echo -e "    ${DIM}($i)${NC} $opt"; i=$((i+1)); done
+    echo -ne "    ${BOLD}Escolha [$default]: ${NC}"
+    IFS= read -r reply || reply=""
+    reply="${reply:-$default}"
+    echo "$reply"
+}
 
-    case "$DISTRO_ID" in
-        ubuntu|debian|linuxmint|pop)       PKG_CMD="apt-get install -y -qq" ;;
-        centos|rhel|rocky|almalinux|ol)    PKG_CMD="dnf install -y -q" ;;
-        fedora)                            PKG_CMD="dnf install -y -q" ;;
-        amzn)                              PKG_CMD="yum install -y -q" ;;
-        arch|manjaro|endeavouros)          PKG_CMD="pacman -S --noconfirm" ;;
-        alpine)                            PKG_CMD="apk add --quiet" ;;
-        opensuse*|sles)                    PKG_CMD="zypper install -y -q" ;;
-        *)                                 PKG_CMD="" ;;
+# ── Distro ──
+detect_pkg() {
+    local id=""
+    [[ -f /etc/os-release ]] && id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"' | head -1)
+    case "$id" in
+        ubuntu|debian|linuxmint|pop)    echo "apt-get install -y -qq" ;;
+        centos|rhel|rocky|almalinux|ol) echo "dnf install -y -q" ;;
+        fedora)                         echo "dnf install -y -q" ;;
+        amzn)                           echo "yum install -y -q" ;;
+        arch|manjaro|endeavouros)       echo "pacman -S --noconfirm" ;;
+        alpine)                         echo "apk add --quiet" ;;
+        opensuse*|sles)                 echo "zypper install -y -q" ;;
+        *) echo "" ;;
     esac
 }
 
@@ -101,26 +75,42 @@ install_pkg() {
     local pkg="$1"
     command -v "$pkg" &>/dev/null && return 0
     info "Instalando $pkg..."
-    if [[ -n "$PKG_CMD" ]]; then
-        eval "$PKG_CMD $pkg" 2>/dev/null
-    else
-        # Fallback: tentar varios
+    local cmd
+    cmd=$(detect_pkg)
+    if [[ -n "$cmd" ]]; then
+        $cmd "$pkg" 2>/dev/null || \
         apt-get install -y -qq "$pkg" 2>/dev/null || \
         dnf install -y -q "$pkg" 2>/dev/null || \
-        yum install -y -q "$pkg" 2>/dev/null || \
         pacman -S --noconfirm "$pkg" 2>/dev/null || \
         apk add --quiet "$pkg" 2>/dev/null || \
-        die "Nao consegui instalar $pkg. Instale manualmente."
+        die "Nao consegui instalar $pkg"
+    else
+        apt-get install -y -qq "$pkg" 2>/dev/null || \
+        dnf install -y -q "$pkg" 2>/dev/null || \
+        pacman -S --noconfirm "$pkg" 2>/dev/null || \
+        apk add --quiet "$pkg" 2>/dev/null || \
+        die "Nao consegui instalar $pkg"
     fi
 }
 
-# ═══════════════════════════════════════
-# INSTALL RCLONE
-# ═══════════════════════════════════════
+# ── Instalar Bun ──
+install_bun() {
+    command -v bun &>/dev/null && { ok "Bun ja instalado ($(bun --version))"; return; }
+    info "Instalando Bun..."
+    curl -fsSL https://bun.sh/install | bash 2>&1 | tail -3
+    # Source bun profile
+    export BUN_INSTALL="${BUN_INSTALL:-$HOME/.bun}"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    command -v bun &>/dev/null || die "Bun nao foi instalado. Instale manualmente: curl -fsSL https://bun.sh/install | bash"
+    ok "Bun $(bun --version) instalado"
+}
+
+# ── Instalar rclone ──
 install_rclone() {
     command -v rclone &>/dev/null && { ok "rclone ja instalado"; return; }
     info "Instalando rclone..."
-    local arch; arch="$(uname -m)"
+    local arch
+    arch=$(uname -m)
     case "$arch" in
         x86_64|amd64) arch="amd64" ;;
         aarch64|arm64) arch="arm64" ;;
@@ -128,17 +118,23 @@ install_rclone() {
         *) die "Arquitetura $arch nao suportada" ;;
     esac
     local url="https://downloads.rclone.org/rclone-current-linux-$arch.zip"
-    curl -fsSL "$url" -o /tmp/rclone.zip || die "Falha ao baixar rclone de $url"
-    unzip -oq /tmp/rclone.zip -d /tmp/ || die "Falha ao extrair rclone"
-    mv /tmp/rclone-*/rclone /usr/local/bin/rclone 2>/dev/null || die "Falha ao mover rclone"
+    local tmp="/tmp/vps-snapshot-install-rclone"
+    mkdir -p "$tmp"
+    curl -fsSL "$url" -o "$tmp/rclone.zip" || die "Falha ao baixar rclone"
+    # Verificar checksum se disponivel
+    if curl -fsSL "${url}.sha256" -o "$tmp/rclone.zip.sha256" 2>/dev/null; then
+        (cd "$tmp" && sha256sum -c rclone.zip.sha256) 2>/dev/null || warn "Checksum do rclone nao bateu (pode ser atualizacao recente)"
+    fi
+    unzip -oq "$tmp/rclone.zip" -d "$tmp/" || die "Falha ao extrair rclone"
+    mv "$tmp"/rclone-*/rclone /usr/local/bin/rclone || die "Falha ao mover rclone"
     chmod +x /usr/local/bin/rclone
-    rm -rf /tmp/rclone.zip /tmp/rclone-*
+    rm -rf "$tmp"
     ok "rclone instalado"
 }
 
-# ═══════════════════════════════════════
+# ═══════════════════════════════════
 # BANNER
-# ═══════════════════════════════════════
+# ═══════════════════════════════════
 clear
 cat << 'BANNER'
 
@@ -146,43 +142,34 @@ cat << 'BANNER'
  ║                                                   ║
  ║           🛡️  VPS SNAPSHOT                        ║
  ║           Backup completo da sua VPS              ║
- ║           Um comando pra instalar                 ║
- ║           Um comando pra backupar                 ║
- ║           Um comando pra restaurar                ║
+ ║           Feito com Bun — rapido e seguro         ║
  ║                                                   ║
  ╚═══════════════════════════════════════════════════╝
 
 BANNER
 
-detect_distro
-
-echo -e "  Sistema:  ${BOLD}$(hostname)${NC}"
-[[ -n "$DISTRO_ID" ]] && echo -e "  Distro:   ${BOLD}${DISTRO_ID} ${DISTRO_VERSION}${NC}"
-echo -e "  Kernel:   ${BOLD}$(uname -r)${NC} ($(uname -m))"
-echo -e "  Disco:    ${BOLD}$(df -h / | tail -1 | awk '{print $4 " livres"}')${NC}"
+echo -e "  Sistema: ${BOLD}$(hostname)${NC}"
+echo -e "  Kernel:  ${BOLD}$(uname -r)${NC} ($(uname -m))"
+echo -e "  Disco:   ${BOLD}$(df -h / | tail -1 | awk '{print $4 " livres"}')${NC}"
 echo ""
 
-# ═══════════════════════════════════════
-# PASSO 1: NOME DA VPS
-# ═══════════════════════════════════════
-step "PASSO 1/5 — Identificar a VPS"
-echo ""
-echo -e "  Cada VPS precisa de um nome unico."
-echo -e "  Isso cria uma pasta separada no provedor de nuvem."
-echo -e "  Exemplos: ${DIM}servidor-web, api-prod, meu-ubuntu, blog-vps${NC}"
-echo ""
-ask "Nome desta VPS" VPS_NAME "$(hostname)"
-# Limpar caracteres problematicos
+# ═══════════════════════════════════
+# PASSO 1: NOME
+# ═══════════════════════════════════
+echo -e "${BOLD}${CYAN}── PASSO 1/5 — Nome da VPS ──${NC}\n"
+echo "  Cada VPS precisa de um nome unico."
+echo "  Exemplos: ${DIM}servidor-web, api-prod, blog-vps${NC}\n"
+VPS_NAME=$(ask_str "Nome desta VPS" "$(hostname)")
 VPS_NAME=$(echo "$VPS_NAME" | tr -cd 'a-zA-Z0-9_-')
+[[ -z "$VPS_NAME" ]] && VPS_NAME="vps-default"
+[[ ${#VPS_NAME} -gt 64 ]] && VPS_NAME="${VPS_NAME:0:64}"
 ok "Nome: $VPS_NAME"
 
-# ═══════════════════════════════════════
-# PASSO 2: PROVEDOR DE NUVEM
-# ═══════════════════════════════════════
-step "PASSO 2/5 — Escolher provedor de nuvem"
-echo ""
-echo -e "  Onde voce quer guardar os backups?"
-echo ""
+# ═══════════════════════════════════
+# PASSO 2: PROVEDOR
+# ═══════════════════════════════════
+echo -e "\n${BOLD}${CYAN}── PASSO 2/5 — Provedor de nuvem ──${NC}\n"
+echo "  Onde guardar os backups?\n"
 PROVIDER=$(ask_choice "Provedor" "1" \
     "Microsoft OneDrive (5 GB gratis)" \
     "Google Drive (15 GB gratis)" \
@@ -191,273 +178,210 @@ PROVIDER=$(ask_choice "Provedor" "1" \
     "Backblaze B2 (10 GB gratis)" \
     "pCloud (10 GB gratis)" \
     "MEGA (20 GB gratis)" \
-    "SFTP (seu proprio servidor)" \
-    "Outro (rclone suporta 70+ provedores)")
+    "SFTP (seu servidor)")
 
 case "$PROVIDER" in
-    1) REMOTE_TYPE="onedrive";   REMOTE_NAME="onedrive";    FREE_SPACE="5 GB" ;;
-    2) REMOTE_TYPE="drive";      REMOTE_NAME="gdrive";      FREE_SPACE="15 GB" ;;
-    3) REMOTE_TYPE="dropbox";    REMOTE_NAME="dropbox";     FREE_SPACE="2 GB" ;;
-    4) REMOTE_TYPE="s3";         REMOTE_NAME="s3";          FREE_SPACE="5 GB (free tier)" ;;
-    5) REMOTE_TYPE="b2";         REMOTE_NAME="backblaze";   FREE_SPACE="10 GB" ;;
-    6) REMOTE_TYPE="pcloud";     REMOTE_NAME="pcloud";      FREE_SPACE="10 GB" ;;
-    7) REMOTE_TYPE="mega";       REMOTE_NAME="mega";        FREE_SPACE="20 GB" ;;
-    8) REMOTE_TYPE="sftp";       REMOTE_NAME="sftp";        FREE_SPACE="depende do servidor" ;;
-    *) REMOTE_TYPE="other";      REMOTE_NAME="remote";      FREE_SPACE="depende do provedor" ;;
+    1) REMOTE_NAME="onedrive";   FREE_SPACE="5 GB" ;;
+    2) REMOTE_NAME="gdrive";     FREE_SPACE="15 GB" ;;
+    3) REMOTE_NAME="dropbox";    FREE_SPACE="2 GB" ;;
+    4) REMOTE_NAME="s3";         FREE_SPACE="5 GB (free tier)" ;;
+    5) REMOTE_NAME="backblaze";  FREE_SPACE="10 GB" ;;
+    6) REMOTE_NAME="pcloud";     FREE_SPACE="10 GB" ;;
+    7) REMOTE_NAME="mega";       FREE_SPACE="20 GB" ;;
+    8) REMOTE_NAME="sftp";       FREE_SPACE="depende" ;;
+    *) REMOTE_NAME="remote";     FREE_SPACE="depende" ;;
 esac
+ok "Provedor: $REMOTE_NAME (~$FREE_SPACE)"
 
-ok "Provedor: $REMOTE_TYPE (espaco livre ~$FREE_SPACE)"
-
-# ═══════════════════════════════════════
+# ═══════════════════════════════════
 # PASSO 3: AGENDAMENTO
-# ═══════════════════════════════════════
-step "PASSO 3/5 — Agendamento"
-echo ""
-echo -e "  Com que frequencia fazer backup?"
-echo -e "  Lembre-se: backups frequentes = menos risco de perder dados"
-echo ""
+# ═══════════════════════════════════
+echo -e "\n${BOLD}${CYAN}── PASSO 3/5 — Agendamento ──${NC}\n"
 SCHEDULE=$(ask_choice "Frequencia" "1" \
-    "Diario as 3h da manha (recomendado)" \
-    "Diario as 0h (meia-noite)" \
+    "Diario as 3h (recomendado)" \
+    "Diario as 0h" \
     "A cada 12 horas" \
     "A cada 6 horas" \
     "Semanal (domingo 3h)" \
-    "Quinzenal (dias 1 e 15 as 3h)" \
-    "Mensal (dia 1 as 3h)" \
-    "Nao agendar (so manual)" \
-    "Customizado")
+    "Quinzenal (dias 1 e 15)" \
+    "Mensal (dia 1)" \
+    "Nao agendar (so manual)")
 
 case "$SCHEDULE" in
-    1) CRON_EXPR="0 3 * * *";         CRON_DESC="Diario as 3h" ;;
-    2) CRON_EXPR="0 0 * * *";         CRON_DESC="Diario as 0h" ;;
-    3) CRON_EXPR="0 */12 * * *";      CRON_DESC="A cada 12h" ;;
-    4) CRON_EXPR="0 */6 * * *";       CRON_DESC="A cada 6h" ;;
-    5) CRON_EXPR="0 3 * * 0";         CRON_DESC="Semanal (domingo 3h)" ;;
-    6) CRON_EXPR="0 3 1,15 * *";      CRON_DESC="Quinzenal (dias 1 e 15)" ;;
-    7) CRON_EXPR="0 3 1 * *";         CRON_DESC="Mensal (dia 1)" ;;
-    8) CRON_EXPR="";                   CRON_DESC="Manual (sem cron)" ;;
-    9)
-        echo -ne "    ${BOLD}Expressao cron: ${NC}"
-        read -r CRON_EXPR
-        CRON_DESC="Customizado: $CRON_EXPR"
-        ;;
+    1) CRON_EXPR="0 3 * * *";      CRON_DESC="Diario 3h" ;;
+    2) CRON_EXPR="0 0 * * *";      CRON_DESC="Diario 0h" ;;
+    3) CRON_EXPR="0 */12 * * *";   CRON_DESC="12h" ;;
+    4) CRON_EXPR="0 */6 * * *";    CRON_DESC="6h" ;;
+    5) CRON_EXPR="0 3 * * 0";      CRON_DESC="Semanal dom" ;;
+    6) CRON_EXPR="0 3 1,15 * *";   CRON_DESC="Quinzenal" ;;
+    7) CRON_EXPR="0 3 1 * *";      CRON_DESC="Mensal" ;;
+    8) CRON_EXPR="";                CRON_DESC="Manual" ;;
+    *) CRON_EXPR="";                CRON_DESC="Manual" ;;
 esac
 ok "Agendamento: $CRON_DESC"
 
-echo ""
-ask "Quantos backups manter no provedor" KEEP_BACKUPS "5"
-KEEP_BACKUPS="${KEEP_BACKUPS:-5}"
-# Validar numero
+KEEP_BACKUPS=$(ask_str "Quantos backups manter" "5")
 [[ "$KEEP_BACKUPS" =~ ^[0-9]+$ ]] || KEEP_BACKUPS=5
-ok "Retencao: $KEEP_BACKUPS backups"
+(( KEEP_BACKUPS < 1 )) && KEEP_BACKUPS=1
+(( KEEP_BACKUPS > 365 )) && KEEP_BACKUPS=365
+ok "Retencao: $KEEP_BACKUPS"
 
-# ═══════════════════════════════════════
-# PASSO 4: OPCOES AVANCADAS
-# ═══════════════════════════════════════
-step "PASSO 4/5 — Opcoes (tudo tem default, so aperte Enter)"
-echo ""
+# ═══════════════════════════════════
+# PASSO 4: OPCOES
+# ═══════════════════════════════════
+echo -e "\n${BOLD}${CYAN}── PASSO 4/5 — Opcoes (Enter = default) ──${NC}\n"
 
-ask "Nivel de compressao (1=rapido, 9=maximo)" COMPRESSION_LEVEL "6"
-[[ "$COMPRESSION_LEVEL" =~ ^[1-9]$ ]] || COMPRESSION_LEVEL=6
+COMPRESSION=$(ask_str "Compressao (1=rapido 9=maximo)" "6")
+[[ "$COMPRESSION" =~ ^[1-9]$ ]] || COMPRESSION=6
 
-ask "Tamanho maximo por arquivo (ex: 4G, 2G, 1G)" SPLIT_SIZE "4G"
+SPLIT_SIZE=$(ask_str "Tamanho max por arquivo (ex: 4G, 2G)" "4G")
+[[ "$SPLIT_SIZE" =~ ^[0-9]+[MGmgKk]?$ ]] || SPLIT_SIZE="4G"
 
-if ask_yn "Excluir imagens Docker do backup? (economiza MUITO espaco, sao reinstalaveis com docker pull)" "y"; then
-    EXCLUDE_DOCKER_IMAGES="true"
-else
-    EXCLUDE_DOCKER_IMAGES="false"
+REMOTE_PATH=$(ask_str "Pasta destino no provedor" "Backup-VPS")
+[[ -z "$REMOTE_PATH" ]] && REMOTE_PATH="Backup-VPS"
+
+EXCLUDE_DOCKER="false"
+if ask_yn "Excluir imagens Docker? (economiza espaco, sao reinstalaveis)" "y"; then
+    EXCLUDE_DOCKER="true"
 fi
 
-ask "Pasta de destino no provedor" REMOTE_PATH "Backup-VPS"
-
-# ═══════════════════════════════════════
+# ═══════════════════════════════════
 # PASSO 5: INSTALACAO
-# ═══════════════════════════════════════
-step "PASSO 5/5 — Instalando"
-echo ""
+# ═══════════════════════════════════
+echo -e "\n${BOLD}${CYAN}── PASSO 5/5 — Instalando ──${NC}\n"
 
-# Deps
-info "Instalando dependencias..."
 install_pkg zip
 install_pkg curl
 install_pkg unzip
-
-# rclone
+install_bun
 install_rclone
 
-# Criar diretorio
 INSTALL_DIR="/opt/vps-snapshot"
-mkdir -p "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/src"
 
-# ═══════════════════════════════════════
-# GERAR CONFIG.SH
-# ═══════════════════════════════════════
-info "Gerando configuracao..."
-cat > "$INSTALL_DIR/config.sh" << CFGEOF
-#!/usr/bin/env bash
-# ═══════════════════════════════════════
-# VPS Snapshot - Config
-# Gerado automaticamente pelo instalador
-# Edite com: sudo nano $INSTALL_DIR/config.sh
-# ═══════════════════════════════════════
+# ── Baixar scripts do repo ──
+REPO_RAW="https://raw.githubusercontent.com/amonmelo/vps-snapshot/main"
+info "Baixando VPS Snapshot..."
 
-# Nome da VPS (pasta no provedor)
-VPS_NAME="$VPS_NAME"
+# Baixar todos os modulos TS + package.json
+SRC_FILES=("package.json" "src/index.ts" "src/config.ts" "src/logger.ts" "src/backup.ts" "src/restore.ts" "src/utils.ts")
+download_ok=true
 
-# Provedor (nome do remote do rclone)
-REMOTE_NAME="$REMOTE_NAME"
-
-# Pasta destino no provedor
-REMOTE_PATH="$REMOTE_PATH"
-
-# Quantos backups manter
-KEEP_BACKUPS=$KEEP_BACKUPS
-
-# Compressao (1-9)
-COMPRESSION_LEVEL=$COMPRESSION_LEVEL
-
-# Split size (arquivos maiores sao divididos)
-SPLIT_SIZE="$SPLIT_SIZE"
-
-# Excluir imagens Docker
-EXCLUDE_DOCKER_IMAGES=$EXCLUDE_DOCKER_IMAGES
-
-# ── Exclusoes ──
-EXCLUDE_VFS=(/proc /sys /dev /run /tmp)
-EXCLUDE_MOUNTS=(/snap /boot/efi)
-EXCLUDE_CACHE=(
-    /var/cache/apt/archives /var/cache/yum /var/cache/dnf /var/cache/apt
-    /var/lib/apt/lists "*/node_modules" "*/__pycache__" "*/.cache"
-    "*/.npm" "*/.pip" "*/.cargo/registry"
-)
-EXCLUDE_TEMP=(*.log *.tmp *.pid *.sock *.swap nohup.out)
-EXCLUDE_SWAP=(/swapfile)
-EXCLUDE_SELF=($INSTALL_DIR /tmp/vps-snapshot-*)
-
-# Comandos antes/depois do backup (descomente se precisar):
-# PRE_BACKUP_COMMANDS=("systemctl stop meu-app")
-# POST_BACKUP_COMMANDS=("systemctl start meu-app")
-PRE_BACKUP_COMMANDS=()
-POST_BACKUP_COMMANDS=()
-CFGEOF
-chmod 600 "$INSTALL_DIR/config.sh"
-ok "Config criado"
-
-# ═══════════════════════════════════════
-# GERAR BACKUP.SH E RESTORE.SH
-# (download dos scripts do repo)
-# ═══════════════════════════════════════
-info "Baixando scripts..."
-
-REPO_RAW="https://raw.githubusercontent.com/SEU_USER/vps-snapshot/main"
-
-for script in backup.sh restore.sh; do
-    if curl -fsSL "$REPO_RAW/$script" -o "$INSTALL_DIR/$script" 2>/dev/null; then
-        chmod +x "$INSTALL_DIR/$script"
-        ok "$script baixado"
+for f in "${SRC_FILES[@]}"; do
+    mkdir -p "$INSTALL_DIR/$(dirname "$f")"
+    if curl -fsSL "$REPO_RAW/$f" -o "$INSTALL_DIR/$f" 2>/dev/null; then
+        : # ok
     else
-        warn "Nao consegui baixar $script do GitHub"
-        warn "Voce pode copiar manualmente depois"
-        # Criar stub
-        echo "#!/bin/bash echo 'Script nao instalado. Copie $script para $INSTALL_DIR/'" > "$INSTALL_DIR/$script"
-        chmod +x "$INSTALL_DIR/$script"
+        warn "Falha ao baixar $f"
+        download_ok=false
     fi
 done
 
-# Criar o comando global (symlink)
-ln -sf "$INSTALL_DIR/backup.sh" /usr/local/bin/vps-snapshot 2>/dev/null || true
+if ! $download_ok || [[ ! -f "$INSTALL_DIR/src/index.ts" ]] || [[ ! -s "$INSTALL_DIR/src/index.ts" ]]; then
+    warn "Nao conseguiu baixar tudo do GitHub. Tentando git clone..."
+    if command -v git &>/dev/null; then
+        git clone --depth 1 https://github.com/amonmelo/vps-snapshot.git /tmp/vps-snapshot-src 2>/dev/null && \
+            cp -r /tmp/vps-snapshot-src/src/*.ts "$INSTALL_DIR/src/" && \
+            rm -rf /tmp/vps-snapshot-src && \
+            download_ok=true
+    fi
+    if ! $download_ok; then
+        die "Nao conseguiu baixar os scripts. Baixe manualmente:\n  git clone https://github.com/amonmelo/vps-snapshot.git\n  cp src/*.ts $INSTALL_DIR/src/"
+    fi
+fi
+
+# ── Gerar config ──
+info "Gerando configuracao..."
+cat > "$INSTALL_DIR/config.json" << CFGEOF
+{
+  "vpsName": "$VPS_NAME",
+  "remoteName": "$REMOTE_NAME",
+  "remotePath": "$REMOTE_PATH",
+  "keepBackups": $KEEP_BACKUPS,
+  "compressionLevel": $COMPRESSION,
+  "splitSize": "$SPLIT_SIZE",
+  "excludeDockerImages": $EXCLUDE_DOCKER,
+  "excludePatterns": [
+    "*.log", "*.tmp", "*.pid", "*.sock", "*.swap", "nohup.out",
+    "*/node_modules", "*/__pycache__", "*/.cache", "*/.npm",
+    "*/.pip", "*/.cargo/registry", "*/go/pkg/mod/cache"
+  ],
+  "excludePaths": [
+    "/proc", "/sys", "/dev", "/run", "/tmp",
+    "/snap", "/boot/efi",
+    "/var/cache/apt/archives", "/var/cache/yum", "/var/cache/dnf",
+    "/var/lib/apt/lists",
+    "$INSTALL_DIR", "/tmp/vps-snapshot-*"
+  ],
+  "preBackupCommands": [],
+  "postBackupCommands": []
+}
+CFGEOF
+chmod 600 "$INSTALL_DIR/config.json"
+ok "Config: $INSTALL_DIR/config.json"
+
+# ── Symlink global ──
+BUN_BIN="${BUN_INSTALL:-$HOME/.bun}/bin/bun"
+cat > /usr/local/bin/vps-snapshot << SYMLINK
+#!/bin/bash
+export PATH="${BUN_INSTALL:-$HOME/.bun}/bin:\$PATH"
+exec bun "$INSTALL_DIR/src/index.ts" "\$@"
+SYMLINK
+chmod +x /usr/local/bin/vps-snapshot
 ok "Comando 'vps-snapshot' disponivel"
 
-# ═══════════════════════════════════════
-# CONFIGURAR PROVEDOR
-# ═══════════════════════════════════════
+# ── Configurar rclone ──
 echo ""
-echo -e "  ${BOLD}Agora vamos conectar com o $REMOTE_TYPE...${NC}"
-echo ""
-
 if rclone listremotes 2>/dev/null | grep -q "^${REMOTE_NAME}:"; then
-    ok "$REMOTE_NAME ja configurado no rclone"
+    ok "$REMOTE_NAME ja configurado"
 else
-    echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "  ${DIM}Voce vai precisar de uma conta no $REMOTE_TYPE${NC}"
-    echo -e "  ${DIM}e autorizar o acesso. O instalador do rclone${NC}"
-    echo -e "  ${DIM}vai abrir um link no navegador para voce logar.${NC}"
-    echo ""
-    echo -e "  ${DIM}Se a VPS nao tem navegador (headless), escolha${NC}"
-    echo -e "  ${DIM}a opcao 'token manual' - voce abre o link no${NC}"
-    echo -e "  ${DIM}seu celular ou PC e cola o codigo aqui.${NC}"
-    echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-
-    if ask_yn "Configurar $REMOTE_TYPE agora?" "y"; then
-        echo ""
-        info "Iniciando configuracao do rclone..."
-        echo -e "  ${DIM}Dica: nome do remote = ${BOLD}${REMOTE_NAME}${NC}"
-        echo ""
+    echo -e "  ${DIM}Voce precisa autorizar o acesso ao provedor.${NC}"
+    echo -e "  ${DIM}Se a VPS nao tem navegador, use token manual.${NC}\n"
+    if ask_yn "Configurar $REMOTE_NAME agora?" "y"; then
+        info "Nome do remote: $REMOTE_NAME"
         rclone config
     else
-        echo ""
-        warn "Sem o provedor configurado, o backup nao funciona."
-        echo -e "  Configure depois com:"
-        echo -e "    ${CYAN}sudo rclone config${NC}"
-        echo -e "  Ou refaca a instalacao:"
-        echo -e "    ${CYAN}sudo bash install.sh${NC}"
-        echo ""
+        warn "Configure depois: sudo rclone config"
     fi
 fi
 
-# ═══════════════════════════════════════
-# TESTAR CONEXAO
-# ═══════════════════════════════════════
+# ── Testar conexao ──
 echo ""
-info "Testando conexao com $REMOTE_TYPE..."
-if rclone lsd "${REMOTE_NAME}:" &>/dev/null; then
-    ok "${REMOTE_NAME}: conectado!"
+info "Testando conexao..."
+if rclone lsd "${REMOTE_NAME}:" &>/dev/null 2>&1; then
+    ok "$REMOTE_NAME: conectado!"
 else
-    warn "${REMOTE_NAME}: nao conseguiu conectar. Verifique a configuracao."
-    echo -e "  ${CYAN}sudo rclone config${NC} para reconfigurar"
+    warn "Nao conectou. Configure: sudo rclone config"
 fi
 
-# ═══════════════════════════════════════
-# CRON
-# ═══════════════════════════════════════
+# ── Cron ──
 if [[ -n "$CRON_EXPR" ]]; then
-    cat > /etc/cron.d/vps-snapshot << CRONEOF
-# VPS Snapshot - $VPS_NAME
-# Instalado: $(date)
-# Frequencia: $CRON_DESC ($CRON_EXPR)
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-$CRON_EXPR root $INSTALL_DIR/backup.sh >> $INSTALL_DIR/cron.log 2>&1
-CRONEOF
+    printf '# VPS Snapshot — %s\nSHELL=/bin/bash\nPATH=%s/bin:%s\n%s root /usr/local/bin/vps-snapshot >> %s/cron.log 2>&1\n' \
+        "$VPS_NAME" \
+        "${BUN_INSTALL:-$HOME/.bun}" \
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        "$CRON_EXPR" \
+        "$INSTALL_DIR" > /etc/cron.d/vps-snapshot
     chmod 644 /etc/cron.d/vps-snapshot
-    ok "Cron agendado: $CRON_DESC"
+    ok "Cron: $CRON_DESC"
 else
-    ok "Sem cron - backup so manual"
+    ok "Sem cron — backup manual"
 fi
 
-# ═══════════════════════════════════════
-# BACKUP DE TESTE
-# ═══════════════════════════════════════
+# ── Teste opcional ──
 echo ""
-if ask_yn "Quer rodar um backup de teste agora?" "n"; then
-    echo ""
+if ask_yn "Rodar backup de teste agora?" "n"; then
     info "Executando backup de teste..."
-    echo ""
-    if "$INSTALL_DIR/backup.sh"; then
-        ok "Backup de teste OK! Verifique o provedor."
-    else
-        warn "Backup de teste falhou. Veja o log:"
-        echo -e "  ${CYAN}sudo vps-snapshot log${NC}"
+    if /usr/local/bin/vps-snapshot estimate; then
+        ok "Estimativa OK! Para backup completo: sudo vps-snapshot"
     fi
 else
-    echo -e "  ${DIM}Para estimar tamanho sem criar backup:${NC}"
-    echo -e "  ${CYAN}sudo vps-snapshot estimate${NC}"
+    echo -e "  ${DIM}Comandos:${NC}"
+    echo -e "  ${CYAN}sudo vps-snapshot estimate${NC}  Estimar tamanho"
+    echo -e "  ${CYAN}sudo vps-snapshot${NC}           Backup manual"
 fi
 
-# ═══════════════════════════════════════
-# RESUMO FINAL
-# ═══════════════════════════════════════
+# ── Resumo ──
 clear
 cat << FINAL
 
@@ -468,29 +392,26 @@ cat << FINAL
  ╚═══════════════════════════════════════════════════╝
 
   VPS:         $VPS_NAME
-  Provedor:    $REMOTE_TYPE
+  Provedor:    $REMOTE_NAME
   Agendamento: $CRON_DESC
   Retencao:    $KEEP_BACKUPS backups
+  Runtime:     Bun $(bun --version)
 
-  ┌─────────────────────────────────────────────┐
-  │  Comandos disponiveis:                      │
-  │                                             │
-  │  vps-snapshot estimate     Estima tamanho   │
-  │  vps-snapshot              Backup manual    │
-  │  vps-snapshot list         Lista backups    │
-  │  vps-snapshot list TS      Ver conteudo     │
-  │  vps-snapshot browse TS    Navegar no bkp   │
-  │  vps-snapshot extract TS   Extrair partes   │
-  │  vps-snapshot full TS      Restaurar tudo   │
-  │  vps-snapshot log          Ver ultimo log   │
-  │  vps-snapshot status       Ver no provedor  │
-  │  vps-snapshot config       Reconfigurar     │
-  │                                             │
-  └─────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────┐
+  │  Comandos:                               │
+  │                                          │
+  │  vps-snapshot estimate    Estimar tamanho│
+  │  vps-snapshot             Backup manual  │
+  │  vps-snapshot list        Listar backups │
+  │  vps-snapshot browse TS   Navegar        │
+  │  vps-snapshot extract TS  Extrair partes │
+  │  vps-snapshot full TS     Restaurar tudo │
+  │  vps-snapshot log         Ver log        │
+  │  vps-snapshot status      Status provedor│
+  │  vps-snapshot config      Editar config  │
+  └──────────────────────────────────────────┘
 
-  TS = timestamp do backup (ex: 2025-01-15_03h00m00s)
-
-  Config:   sudo nano /opt/vps-snapshot/config.sh
-  Log:      sudo tail -f /opt/vps-snapshot/backup.log
+  Config:  sudo nano $INSTALL_DIR/config.json
+  Log:     sudo tail -f $INSTALL_DIR/backup.log
 
 FINAL

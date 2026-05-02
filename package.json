@@ -1,0 +1,15 @@
+{
+  "name": "vps-snapshot",
+  "version": "1.0.0",
+  "description": "Backup completo da VPS para a nuvem — um comando pra instalar, um pra backupar, um pra restaurar",
+  "module": "src/index.ts",
+  "bin": {
+    "vps-snapshot": "src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun src/index.ts",
+    "build": "bun build src/index.ts --compile --outfile vps-snapshot"
+  },
+  "keywords": ["backup", "vps", "onedrive", "snapshot", "rclone"],
+  "license": "MIT"
+}
